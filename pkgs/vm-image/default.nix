@@ -4,6 +4,7 @@
   lib,
   pkgs,
 
+  copyDirectories ? { },
   debug ? false,
   extraConfig ? { },
   onDemand ? {
@@ -17,6 +18,7 @@
 let
   cfg = {
     inherit
+      copyDirectories
       debug
       onDemand
       rosetta

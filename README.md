@@ -122,6 +122,22 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 }
 ```
 
+**Copy host files into the guest without a persistent mount**
+
+```nix
+{
+  services.virby.copyDirectories.PiSecrets = {
+    source = "/Users/alice/.pi/agent";
+    target = "/Users/alice/.pi/agent";
+    files = [ "auth.json" "oauth.json" "models.json" ];
+    owner = "alice";
+    group = "staff";
+  };
+}
+```
+
+`copyDirectories` exposes each source as a virtio-fs device, mounts it read-only in a one-shot guest service, copies the selected relative files to the target, and unmounts it again. Use `sharedDirectories` when the guest should keep seeing live host files; use `copyDirectories` when the guest should get local copies.
+
 **Custom NixOS Configuration**
 
 

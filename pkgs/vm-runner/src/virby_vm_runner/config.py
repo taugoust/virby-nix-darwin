@@ -101,35 +101,9 @@ class VMConfig:
             )
         self._on_demand_ttl = on_demand_ttl
 
-        # Validate and store shared-dirs
-        self._shared_dirs: dict[str, Path] = {}
-        shared_dirs = self._config.get("shared-dirs", {})
-        if not isinstance(shared_dirs, dict):
-            raise VMConfigurationError(f"Invalid shared-dirs: {shared_dirs}. Expected: dictionary")
-        for tag, path in shared_dirs.items():
-            host_path = Path(path)
-            try:
-                host_path_stat = host_path.stat()
-            except FileNotFoundError:
-                raise VMConfigurationError(f"Shared directory does not exist on host: {host_path}")
-            except PermissionError:
-                raise VMConfigurationError(
-                    f"Shared directory is not accessible to the virby daemon user: {host_path}"
-                )
-            except OSError as e:
-                raise VMConfigurationError(
-                    f"Failed to access shared directory {host_path}: {e}"
-                ) from e
-
-            if not stat.S_ISDIR(host_path_stat.st_mode):
-                raise VMConfigurationError(f"Shared directory is not a directory: {host_path}")
-
-            try:
-                self._shared_dirs[tag] = host_path.resolve()
-            except OSError as e:
-                raise VMConfigurationError(
-                    f"Failed to resolve shared directory {host_path}: {e}"
-                ) from e
+        # Validate and store shared-dirs and copy-dirs
+        self._shared_dirs = self._validate_directory_map("shared-dirs")
+        self._copy_dirs = self._validate_directory_map("copy-dirs")
 
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
@@ -147,6 +121,44 @@ class VMConfig:
         ]:
             if not isinstance(timeout_val, int) or timeout_val < 1:
                 raise VMConfigurationError(f"Invalid {timeout_name}: {timeout_val}")
+
+    def _validate_directory_map(self, key: str) -> dict[str, Path]:
+        result: dict[str, Path] = {}
+        directories = self._config.get(key, {})
+        if not isinstance(directories, dict):
+            raise VMConfigurationError(f"Invalid {key}: {directories}. Expected: dictionary")
+
+        for tag, path in directories.items():
+            if not isinstance(tag, str) or not tag:
+                raise VMConfigurationError(f"Invalid {key} tag: {tag}. Expected: non-empty string")
+            if not isinstance(path, str):
+                raise VMConfigurationError(f"Invalid {key}.{tag}: {path}. Expected: string path")
+
+            host_path = Path(path)
+            try:
+                host_path_stat = host_path.stat()
+            except FileNotFoundError:
+                raise VMConfigurationError(f"{key} directory does not exist on host: {host_path}")
+            except PermissionError:
+                raise VMConfigurationError(
+                    f"{key} directory is not accessible to the virby daemon user: {host_path}"
+                )
+            except OSError as e:
+                raise VMConfigurationError(
+                    f"Failed to access {key} directory {host_path}: {e}"
+                ) from e
+
+            if not stat.S_ISDIR(host_path_stat.st_mode):
+                raise VMConfigurationError(f"{key} path is not a directory: {host_path}")
+
+            try:
+                result[tag] = host_path.resolve()
+            except OSError as e:
+                raise VMConfigurationError(
+                    f"Failed to resolve {key} directory {host_path}: {e}"
+                ) from e
+
+        return result
 
     @property
     def cores(self) -> int:
@@ -201,8 +213,13 @@ class VMConfig:
 
     @property
     def shared_dirs(self) -> Dict[str, Path]:
-        """Get shared directories mapping."""
+        """Get persistently mounted shared directories mapping."""
         return self._shared_dirs
+
+    @property
+    def copy_dirs(self) -> Dict[str, Path]:
+        """Get copy-only directories mapping."""
+        return self._copy_dirs
 
     @property
     def vm_pause_timeout(self) -> int:

@@ -135,14 +135,56 @@ in
   # Once SSH has been allowed to start (and given the guest user a chance to log in), the
   # virtiofs must never be mounted again (as the user could have left some process active to
   # read its secrets). This is prevented by `unitconfig.ConditionPathExists` below.
-  systemd.services.install-sshd-keys =
+  systemd.services = {
+    install-sshd-keys =
+      let
+        mountTag = "sshd-keys";
+        mountPoint = "/var/${mountTag}";
+        authorizedKeysDir = "${sshDirPath}/authorized_keys.d";
+      in
+      {
+        description = "Install sshd's host and authorized keys";
+
+        path = with pkgs; [
+          coreutils
+          mount
+          umount
+        ];
+
+        before = [ "sshd.service" ];
+        requiredBy = [ "sshd.service" ];
+
+        enableStrictShellChecks = true;
+        serviceConfig.Type = "oneshot";
+        unitConfig.ConditionPathExists = "!${authorizedKeysDir}/${vmUser}";
+
+        script = ''
+          mkdir -p ${mountPoint}
+          mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}
+
+          install -Dm600 -t ${sshDirPath} ${mountPoint}/${sshHostPrivateKeyFileName}
+          install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
+
+          umount ${mountPoint}
+          rm -rf ${mountPoint}
+        '';
+      };
+  }
+  // lib.mapAttrs' (
+    tag: copy:
     let
-      mountTag = "sshd-keys";
-      mountPoint = "/var/${mountTag}";
-      authorizedKeysDir = "${sshDirPath}/authorized_keys.d";
+      mountPoint = "/run/virby-copy/${tag}";
+      fileCopies = lib.concatMapStringsSep "\n" (file: ''
+        src="$mount_point/${file}"
+        dst=${lib.escapeShellArg "${copy.target}/${file}"}
+        if [ -r "$src" ]; then
+          install -d -m ${copy.directoryMode} -o ${copy.owner} -g ${copy.group} "$(dirname "$dst")"
+          install -m ${copy.fileMode} -o ${copy.owner} -g ${copy.group} "$src" "$dst"
+        fi
+      '') copy.files;
     in
-    {
-      description = "Install sshd's host and authorized keys";
+    lib.nameValuePair "copy-virby-directory-${tag}" {
+      description = "Copy selected files from Virby directory '${tag}'";
 
       path = with pkgs; [
         coreutils
@@ -150,24 +192,39 @@ in
         umount
       ];
 
-      before = [ "sshd.service" ];
-      requiredBy = [ "sshd.service" ];
+      after = [
+        "local-fs.target"
+        "systemd-tmpfiles-setup.service"
+      ];
+      before = [
+        "multi-user.target"
+        "home-manager-${copy.owner}.service"
+      ];
+      wantedBy = [ "multi-user.target" ];
 
       enableStrictShellChecks = true;
       serviceConfig.Type = "oneshot";
-      unitConfig.ConditionPathExists = "!${authorizedKeysDir}/${vmUser}";
 
       script = ''
-        mkdir -p ${mountPoint}
-        mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}
+        set -euo pipefail
 
-        install -Dm600 -t ${sshDirPath} ${mountPoint}/${sshHostPrivateKeyFileName}
-        install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
+        mount_point=${lib.escapeShellArg mountPoint}
 
-        umount ${mountPoint}
-        rm -rf ${mountPoint}
-      '';
-    };
+        cleanup() {
+          umount "$mount_point" 2>/dev/null || true
+          rm -rf "$mount_point"
+        }
+        trap cleanup EXIT
+
+        install -d -m 0700 "$mount_point"
+        mount -t virtiofs -o nodev,noexec,nosuid,ro ${lib.escapeShellArg tag} "$mount_point"
+        install -d -m ${copy.directoryMode} -o ${copy.owner} -g ${copy.group} ${lib.escapeShellArg copy.target}
+
+      ''
+      + fileCopies
+      + "";
+    }
+  ) cfg.copyDirectories;
 
   systemd.mounts = lib.mapAttrsToList (
     tag: _hostPath:

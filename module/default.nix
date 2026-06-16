@@ -49,6 +49,7 @@ let
 
   imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
     inherit (cfg)
+      copyDirectories
       debug
       extraConfig
       onDemand
@@ -82,6 +83,7 @@ let
       rosetta = cfg.rosetta;
       ttl = cfg.onDemand.ttl * 60; # Convert to seconds
       shared-dirs = cfg.sharedDirectories;
+      copy-dirs = lib.mapAttrs (_tag: value: value.source) cfg.copyDirectories;
     }
   );
 
@@ -347,16 +349,14 @@ in
 
       launchd.daemons = {
         ${daemonName} = {
-          path =
-            with pkgs;
-            [
-              coreutils
-              findutils
-              gnugrep
-              nix
-              openssh
-              self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
-            ];
+          path = with pkgs; [
+            coreutils
+            findutils
+            gnugrep
+            nix
+            openssh
+            self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
+          ];
           command = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
 
           serviceConfig = {

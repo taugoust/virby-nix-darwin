@@ -259,9 +259,13 @@ class VMProcess:
         if self.config.rosetta_enabled:
             cmd.extend(["--device", "rosetta,mountTag=rosetta"])
 
-        # Add shared directories, if any
-        shared_dirs = self.config.shared_dirs
-        for tag, path in shared_dirs.items():
+        # Add persistent shared directories, if any.
+        for tag, path in self.config.shared_dirs.items():
+            cmd.extend(["--device", f"virtio-fs,sharedDir={path},mountTag={tag}"])
+
+        # Add copy-only directories. The guest image mounts these only from
+        # one-shot copy services and does not keep them persistently mounted.
+        for tag, path in self.config.copy_dirs.items():
             cmd.extend(["--device", f"virtio-fs,sharedDir={path},mountTag={tag}"])
 
         return cmd

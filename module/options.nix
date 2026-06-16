@@ -164,6 +164,80 @@
       };
     };
 
+    copyDirectories = lib.mkOption {
+      type =
+        with lib.types;
+        attrsOf (submodule {
+          options = {
+            source = lib.mkOption {
+              type = str;
+              description = ''
+                Host directory to expose temporarily to the VM as a virtio-fs device.
+              '';
+            };
+
+            target = lib.mkOption {
+              type = str;
+              description = ''
+                Guest directory where selected files should be copied.
+              '';
+            };
+
+            files = lib.mkOption {
+              type = listOf str;
+              default = [ ];
+              description = ''
+                Relative file paths to copy from the source directory to the target directory.
+              '';
+            };
+
+            owner = lib.mkOption {
+              type = str;
+              default = "root";
+              description = "Owner for copied files and created target directories.";
+            };
+
+            group = lib.mkOption {
+              type = str;
+              default = "root";
+              description = "Group for copied files and created target directories.";
+            };
+
+            fileMode = lib.mkOption {
+              type = str;
+              default = "0600";
+              description = "Mode for copied files, passed to install -m.";
+            };
+
+            directoryMode = lib.mkOption {
+              type = str;
+              default = "0700";
+              description = "Mode for created target directories, passed to install -m.";
+            };
+          };
+        });
+      default = { };
+      description = ''
+        Host directories that should be exposed to the VM only long enough to copy selected files
+        into the guest. Unlike sharedDirectories, these are not mounted persistently in the VM.
+
+        The attribute name is used as the virtio-fs mount tag.
+      '';
+      example = {
+        secrets = {
+          source = "/Users/alice/.pi/agent";
+          target = "/Users/alice/.pi/agent";
+          files = [
+            "auth.json"
+            "oauth.json"
+            "models.json"
+          ];
+          owner = "alice";
+          group = "staff";
+        };
+      };
+    };
+
     speedFactor = lib.mkOption {
       type = lib.types.int;
       default = 1;
