@@ -218,6 +218,66 @@ let
     fi
   '';
 
+  virbyUpdateScript = pkgs.writeShellScriptBin "virby-update" ''
+    set -euo pipefail
+
+    PATH=${binPath}:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+
+    if [[ $(id -u) -ne 0 ]]; then
+      exec /usr/bin/sudo "$0" "$@"
+    fi
+
+    restart=1
+    if [[ ''${1:-} == "--no-restart" ]]; then
+      restart=0
+      shift
+    fi
+
+    if [[ $# -gt 0 ]]; then
+      echo "usage: virby-update [--no-restart]" >&2
+      exit 2
+    fi
+
+    ${setupLogFunctions}
+
+    daemon_label="system/org.nixos.${daemonName}"
+    daemon_plist="/Library/LaunchDaemons/org.nixos.${daemonName}.plist"
+    was_loaded=0
+
+    if /bin/launchctl print "$daemon_label" >/dev/null 2>&1; then
+      was_loaded=1
+      logInfo "Stopping ${daemonName} before updating VM image..."
+      /bin/launchctl bootout system "$daemon_plist" || true
+    fi
+
+    # The VM process can survive daemon unload during failure cases. Kill it so
+    # base.img/diff.img are not in use while preparing the new image.
+    /usr/bin/pkill -f vfkit || true
+
+    if [[ ! -d ${workingDirectory} ]]; then
+      logInfo "Setting up working directory..."
+      mkdir -p ${workingDirectory}
+    fi
+    chown ${darwinUser}:${darwinGroup} ${workingDirectory}
+
+    logInfo "Preparing Virby VM runtime files..."
+    if ! ${prepareVmScript}; then
+      logError "Failed to prepare Virby VM runtime files"
+      exit 1
+    fi
+
+    chown -R ${darwinUser}:${darwinGroup} ${workingDirectory}
+
+    if [[ $restart -eq 1 && -e "$daemon_plist" ]]; then
+      logInfo "Starting ${daemonName}..."
+      if [[ $was_loaded -eq 1 ]]; then
+        /bin/launchctl bootstrap system "$daemon_plist" || /bin/launchctl kickstart -k "$daemon_label" || true
+      else
+        /bin/launchctl bootstrap system "$daemon_plist" || true
+      fi
+    fi
+  '';
+
   buildMachines = [
     {
       hostName = vmHostName;
@@ -322,11 +382,17 @@ in
 
         chown ${darwinUser}:${darwinGroup} ${workingDirectory}
 
-        logInfo "Preparing Virby VM runtime files..."
-        if ! ${prepareVmScript}; then
-          logError "Failed to prepare Virby VM runtime files"
-          exit 1
-        fi
+        ${lib.optionalString (cfg.imageManagement == "activation") ''
+          logInfo "Preparing Virby VM runtime files..."
+          if ! ${prepareVmScript}; then
+            logError "Failed to prepare Virby VM runtime files"
+            exit 1
+          fi
+        ''}
+        ${lib.optionalString (cfg.imageManagement == "manual") ''
+          logInfo "Virby VM image management is manual; skipping VM image preparation during activation."
+          logInfo "Run virby-update to rebuild/update the VM image."
+        ''}
 
         chown -R ${darwinUser}:${darwinGroup} ${workingDirectory}
       '';
@@ -378,7 +444,12 @@ in
         };
       };
 
-      system.build.virbyImage = imageWithFinalConfig;
+      system.build = {
+        virbyUpdate = virbyUpdateScript;
+      }
+      // lib.optionalAttrs (cfg.imageManagement == "activation") {
+        virbyImage = imageWithFinalConfig;
+      };
     })
 
     (lib.mkIf (!cfg.supportDeterminateNix) {

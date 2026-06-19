@@ -49,6 +49,24 @@
       '';
     };
 
+    imageManagement = lib.mkOption {
+      type = lib.types.enum [
+        "activation"
+        "manual"
+      ];
+      default = "activation";
+      description = ''
+        How Virby prepares the VM disk image.
+
+        - `activation`: preserve the historical behavior. Nix-darwin activation builds the Linux
+          VM image, copies it to the Virby working directory, and recreates the writable overlay
+          when the image changes.
+        - `manual`: nix-darwin activation only manages the macOS-side daemon, SSH config, builder
+          config, and working directory. VM image preparation is skipped during `darwin-rebuild` and
+          exposed as `config.system.build.virbyUpdate` for explicit updates.
+      '';
+    };
+
     diskSize = lib.mkOption {
       type = lib.types.str;
       default = "100GiB";
