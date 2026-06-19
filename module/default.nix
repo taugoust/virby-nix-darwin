@@ -124,13 +124,17 @@ let
       chmod 600 "$temp_host_key"
       chmod 600 "$temp_user_key"
 
-      # Remove old keys if they exist
+      # Remove old managed key files if they exist, but do not delete and
+      # recreate ${sshdKeysSharedDirName}. vfkit's virtiofs device can retain an
+      # open reference to the old directory inode across an in-guest reboot,
+      # causing the guest to see an empty stale key directory.
       rm -f ${sshUserPrivateKeyFileName} ${sshUserPrivateKeySharedFileName} ${sshHostPublicKeyFileName}
-      rm -rf ${sshdKeysSharedDirName}
+      mkdir -p ${sshdKeysSharedDirName}
+      rm -f \
+        ${sshdKeysSharedDirName}/${sshHostPrivateKeyFileName} \
+        ${sshdKeysSharedDirName}/${sshUserPublicKeyFileName}
 
       echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ${sshKnownHostsFileName}
-
-      mkdir -p ${sshdKeysSharedDirName}
 
       mv "$temp_user_key" ${sshUserPrivateKeyFileName}
       mv "$temp_host_key.pub" ${sshHostPublicKeyFileName}

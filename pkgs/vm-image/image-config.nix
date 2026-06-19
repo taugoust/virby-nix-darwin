@@ -155,18 +155,38 @@ in
         requiredBy = [ "sshd.service" ];
 
         enableStrictShellChecks = true;
-        serviceConfig.Type = "oneshot";
-        unitConfig.ConditionPathExists = "!${authorizedKeysDir}/${vmUser}";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
 
         script = ''
+          set -euo pipefail
+
+          cleanup() {
+            umount ${mountPoint} 2>/dev/null || true
+            rm -rf ${mountPoint}
+          }
+          trap cleanup EXIT
+
           mkdir -p ${mountPoint}
-          mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}
+
+          for attempt in $(seq 1 20); do
+            if mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}; then
+              if [ -r ${mountPoint}/${sshHostPrivateKeyFileName} ] && [ -r ${mountPoint}/${sshUserPublicKeyFileName} ]; then
+                break
+              fi
+              umount ${mountPoint} 2>/dev/null || true
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "sshd key virtiofs mount did not contain required keys" >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
 
           install -Dm600 -t ${sshDirPath} ${mountPoint}/${sshHostPrivateKeyFileName}
           install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
-
-          umount ${mountPoint}
-          rm -rf ${mountPoint}
         '';
       };
   }
