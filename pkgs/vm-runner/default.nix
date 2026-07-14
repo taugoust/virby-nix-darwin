@@ -5,7 +5,8 @@
   buildPythonApplication,
   hatchling,
   httpx,
-  vfkit,
+  pytestCheckHook,
+  vfkit ? null,
   writeText,
 }:
 
@@ -25,8 +26,10 @@ buildPythonApplication {
   dependencies = [
     aiofiles
     httpx
-    vfkit
-  ];
+  ]
+  ++ lib.optional (vfkit != null) vfkit;
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   pythonImportsCheck = [
     "virby_vm_runner"
@@ -61,7 +64,7 @@ buildPythonApplication {
     description = "Vfkit-based VM runner for Virby";
     homepage = "https://github.com/quinneden/virby-nix-darwin";
     license = lib.licenses.mit;
-    platforms = lib.platforms.darwin;
+    platforms = if vfkit == null then lib.platforms.unix else lib.platforms.darwin;
     mainProgram = "virby-vm";
   };
 }

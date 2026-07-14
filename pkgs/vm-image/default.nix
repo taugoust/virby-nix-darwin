@@ -13,6 +13,10 @@
   },
   rosetta ? false,
   sharedDirectories ? { },
+  timeSync ? {
+    enable = true;
+    vsockPort = 1025;
+  },
 }:
 
 let
@@ -23,6 +27,7 @@ let
       onDemand
       rosetta
       sharedDirectories
+      timeSync
       ;
   };
 
@@ -34,6 +39,13 @@ let
       extraConfig
     ];
   };
+  image = nixosSystem.config.system.build.images.raw-efi;
 in
 
-nixosSystem.config.system.build.images.raw-efi
+image
+// {
+  nixosConfiguration = nixosSystem;
+  passthru = (image.passthru or { }) // {
+    nixosConfiguration = nixosSystem;
+  };
+}

@@ -18,6 +18,11 @@ let
 
   sshDirPath = "/etc/ssh/";
   sshHostPrivateKeyPath = sshDirPath + sshHostPrivateKeyFileName;
+  timeSync =
+    cfg.timeSync or {
+      enable = false;
+      vsockPort = 1025;
+    };
 in
 
 {
@@ -43,6 +48,7 @@ in
 
   environment = {
     defaultPackages = lib.mkDefault [ ];
+    systemPackages = lib.optionals timeSync.enable [ pkgs.util-linux ];
     stub-ld.enable = lib.mkDefault false;
   };
 
@@ -189,6 +195,51 @@ in
           install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
         '';
       };
+  }
+  // lib.optionalAttrs timeSync.enable {
+    virby-time-sync-agent = {
+      description = "Synchronize Virby guest time after macOS wakes";
+
+      wantedBy = [ "multi-user.target" ];
+      before = [ "sshd.service" ];
+      after = [ "systemd-modules-load.service" ];
+
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = lib.concatStringsSep " " [
+          "${pkgs.qemu_kvm.ga}/bin/qemu-ga"
+          "--method=vsock-listen"
+          "--path=4294967295:${toString timeSync.vsockPort}"
+          "--allow-rpcs=guest-set-time"
+          "--statedir=/run/virby-time-sync-agent"
+          "--pidfile=/run/virby-time-sync-agent/qemu-ga.pid"
+        ];
+        Restart = "always";
+        RestartSec = "1s";
+        RuntimeDirectory = "virby-time-sync-agent";
+        RuntimeDirectoryMode = "0700";
+        UMask = "0077";
+
+        CapabilityBoundingSet = [ "CAP_SYS_TIME" ];
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectClock = false;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectSystem = "strict";
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_VSOCK"
+        ];
+        RestrictNamespaces = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+      };
+    };
   }
   // lib.mapAttrs' (
     tag: copy:

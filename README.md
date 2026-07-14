@@ -101,6 +101,8 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 | `diskSize`    | _string_     | `"100GiB"` | VM disk size                                 |
 | `port`        | _int_        | `31222`    | SSH port for VM access                       |
 | `speedFactor` | _int_        | `1`        | Speed factor for Nix build machine           |
+| `timeSync.enable` | _bool_   | `true`     | Correct guest time immediately after macOS wakes |
+| `timeSync.vsockPort` | _int_ | `1025`     | Dedicated host-to-guest time-sync vsock port |
 
 ### Other Settings
 
@@ -112,6 +114,24 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
   services.virby.onDemand.ttl = 180;  # Idle timeout in minutes
 }
 ```
+
+**Guest Time Synchronization**
+
+Virby enables vfkit's macOS wake-time synchronization by default. A restricted QEMU Guest Agent
+inside the NixOS image listens only for `guest-set-time` over a host-only virtio-vsock channel.
+This avoids waiting for the guest's next NTP poll after the Mac wakes.
+
+```nix
+{
+  services.virby.timeSync = {
+    enable = true;
+    vsockPort = 1025;
+  };
+}
+```
+
+Disable this only when the guest supplies an equivalent host-resume synchronization mechanism.
+Changing the setting requires updating the VM image as well as restarting the host runner.
 
 **Rosetta Support**
 

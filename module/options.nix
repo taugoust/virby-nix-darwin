@@ -256,6 +256,39 @@
       };
     };
 
+    timeSync = lib.mkOption {
+      type =
+        with lib.types;
+        (submodule {
+          options = {
+            enable = lib.mkOption {
+              type = bool;
+              default = true;
+              description = ''
+                Whether to synchronize the guest clock immediately after macOS wakes.
+
+                Virby configures vfkit's host wake notifier and a restricted QEMU Guest Agent
+                over virtio-vsock. Disable this only when the guest supplies an equivalent
+                host-resume time synchronization mechanism.
+              '';
+            };
+
+            vsockPort = lib.mkOption {
+              type = ints.between 1025 65535;
+              default = 1025;
+              description = ''
+                The virtio-vsock port used exclusively for host-to-guest clock synchronization.
+              '';
+            };
+          };
+        });
+      default = { };
+      description = ''
+        Guest clock synchronization settings. This is enabled by default because a vfkit guest's
+        realtime clock stops while the Mac sleeps and ordinary NTP recovery can be delayed.
+      '';
+    };
+
     speedFactor = lib.mkOption {
       type = lib.types.int;
       default = 1;

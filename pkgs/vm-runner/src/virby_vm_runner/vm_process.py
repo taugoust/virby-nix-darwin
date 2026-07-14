@@ -249,6 +249,14 @@ class VMProcess:
             "virtio-balloon",
         ]
 
+        if self.config.time_sync_enabled:
+            cmd.extend(
+                [
+                    "--timesync",
+                    f"vsockPort={self.config.time_sync_vsock_port}",
+                ]
+            )
+
         # The guest image is configured with `console=hvc0`, so it always needs
         # a virtio serial console device to boot. Keep a device
         # present regardless of debug mode so that toggling it does not require rebuilding the image. 

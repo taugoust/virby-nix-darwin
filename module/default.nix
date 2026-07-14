@@ -55,6 +55,7 @@ let
       onDemand
       rosetta
       sharedDirectories
+      timeSync
       ;
   };
 
@@ -81,6 +82,10 @@ let
       on-demand = cfg.onDemand.enable;
       port = cfg.port;
       rosetta = cfg.rosetta;
+      time-sync = {
+        enable = cfg.timeSync.enable;
+        vsock-port = cfg.timeSync.vsockPort;
+      };
       ttl = cfg.onDemand.ttl * 60; # Convert to seconds
       shared-dirs = cfg.sharedDirectories;
       copy-dirs = lib.mapAttrs (_tag: value: value.source) cfg.copyDirectories;
@@ -451,9 +456,7 @@ in
       system.build = {
         virbyUpdate = virbyUpdateScript;
       }
-      // lib.optionalAttrs (cfg.imageManagement == "activation") {
-        virbyImage = imageWithFinalConfig;
-      };
+      // lib.optionalAttrs (cfg.imageManagement == "activation") { virbyImage = imageWithFinalConfig; };
     })
 
     (lib.mkIf (!cfg.supportDeterminateNix) {

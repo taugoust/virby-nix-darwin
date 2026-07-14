@@ -87,6 +87,33 @@ class VMConfig:
             raise VMConfigurationError(f"Invalid rosetta setting: {rosetta}. Expected: boolean")
         self._rosetta_enabled = rosetta
 
+        # Validate and store host-wake time synchronization
+        time_sync = self._config.get("time-sync", {"enable": False, "vsock-port": 1025})
+        if not isinstance(time_sync, dict):
+            raise VMConfigurationError(
+                f"Invalid time-sync setting: {time_sync}. Expected: dictionary"
+            )
+
+        time_sync_enabled = time_sync.get("enable", False)
+        if not isinstance(time_sync_enabled, bool):
+            raise VMConfigurationError(
+                f"Invalid time-sync.enable setting: {time_sync_enabled}. Expected: boolean"
+            )
+        self._time_sync_enabled = time_sync_enabled
+
+        time_sync_vsock_port = time_sync.get("vsock-port", 1025)
+        if (
+            not isinstance(time_sync_vsock_port, int)
+            or isinstance(time_sync_vsock_port, bool)
+            or time_sync_vsock_port < 1025
+            or time_sync_vsock_port > 65535
+        ):
+            raise VMConfigurationError(
+                "Invalid time-sync.vsock-port setting: "
+                f"{time_sync_vsock_port}. Expected: integer between 1025 and 65535"
+            )
+        self._time_sync_vsock_port = time_sync_vsock_port
+
         # Validate and store on-demand
         on_demand = self._config.get("on-demand", False)
         if not isinstance(on_demand, bool):
@@ -202,6 +229,16 @@ class VMConfig:
         return int(self._ssh_ready_timeout)
 
     @property
+    def time_sync_enabled(self) -> bool:
+        """Check whether vfkit host-wake time synchronization is enabled."""
+        return bool(self._time_sync_enabled)
+
+    @property
+    def time_sync_vsock_port(self) -> int:
+        """Get the dedicated guest-agent virtio-vsock port."""
+        return int(self._time_sync_vsock_port)
+
+    @property
     def on_demand_enabled(self) -> bool:
         """Check if on-demand activation is enabled."""
         return bool(self._on_demand_enabled)
@@ -250,6 +287,8 @@ class VMConfig:
                 f"rosetta_enabled={self.rosetta_enabled}",
                 f"shared_dirs={self.shared_dirs}",
                 f"ssh_ready_timeout={self.ssh_ready_timeout}",
+                f"time_sync_enabled={self.time_sync_enabled}",
+                f"time_sync_vsock_port={self.time_sync_vsock_port}",
                 f"vm_pause_timeout={self.vm_pause_timeout}",
                 f"vm_resume_timeout={self.vm_resume_timeout}",
                 f"vm_stop_timeout={self.vm_stop_timeout}",
