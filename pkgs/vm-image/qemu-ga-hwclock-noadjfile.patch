@@ -8,7 +8,7 @@ index 47cee1c351..8f2b01ee9e 100644
      struct timeval tv;
 -    const char *argv[] = {"/run/current-system/sw/bin/hwclock", has_time ? "-w" : "-s", NULL};
 +    const char *argv[] = {"/run/current-system/sw/bin/hwclock", "--noadjfile",
-+                          has_time ? "-w" : "-s", NULL};
++                          "--utc", has_time ? "-w" : "-s", NULL};
  
      /* If user has passed a time, validate and set it. */
      if (has_time) {

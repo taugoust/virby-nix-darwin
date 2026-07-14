@@ -94,7 +94,7 @@
                 commands=${patchedQemuGuestAgentSource}/qga/commands-posix.c
 
                 grep -F '"/run/current-system/sw/bin/hwclock", "--noadjfile"' "$commands"
-                grep -F 'has_time ? "-w" : "-s", NULL' "$commands"
+                grep -F '"--utc", has_time ? "-w" : "-s", NULL' "$commands"
                 if grep -F 'argv[0] = "/sbin/hwclock"' "$commands"; then
                   echo "qemu-ga retains the unsafe /sbin/hwclock fallback" >&2
                   exit 1
