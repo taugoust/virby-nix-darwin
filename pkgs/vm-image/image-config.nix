@@ -18,6 +18,7 @@ let
 
   sshDirPath = "/etc/ssh/";
   sshHostPrivateKeyPath = sshDirPath + sshHostPrivateKeyFileName;
+  qemuGuestAgent = pkgs.callPackage ./qemu-guest-agent.nix { };
   timeSync =
     cfg.timeSync or {
       enable = false;
@@ -207,7 +208,7 @@ in
       serviceConfig = {
         Type = "simple";
         ExecStart = lib.concatStringsSep " " [
-          "${pkgs.qemu_kvm.ga}/bin/qemu-ga"
+          "${qemuGuestAgent.ga}/bin/qemu-ga"
           "--method=vsock-listen"
           "--path=4294967295:${toString timeSync.vsockPort}"
           "--allow-rpcs=guest-set-time"

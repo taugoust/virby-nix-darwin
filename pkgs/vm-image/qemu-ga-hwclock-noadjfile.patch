@@ -1,0 +1,26 @@
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 47cee1c351..8f2b01ee9e 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -274,7 +274,8 @@ void qmp_guest_set_time(bool has_time, int64_t time_ns, Error **errp)
+     int ret;
+     Error *local_err = NULL;
+     struct timeval tv;
+-    const char *argv[] = {"/run/current-system/sw/bin/hwclock", has_time ? "-w" : "-s", NULL};
++    const char *argv[] = {"/run/current-system/sw/bin/hwclock", "--noadjfile",
++                          has_time ? "-w" : "-s", NULL};
+ 
+     /* If user has passed a time, validate and set it. */
+     if (has_time) {
+@@ -307,11 +308,6 @@ void qmp_guest_set_time(bool has_time, int64_t time_ns, Error **errp)
+      * hardware clock (RTC). */
+     ga_run_command(argv, NULL, "set hardware clock to system time",
+                    &local_err);
+-    if (local_err) {
+-        argv[0] = "/sbin/hwclock";
+-        ga_run_command(argv, NULL, "set hardware clock to system time",
+-                       &local_err);
+-    }
+     if (local_err) {
+         error_propagate(errp, local_err);
+         return;

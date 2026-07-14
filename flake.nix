@@ -71,6 +71,11 @@
             disabledConfig = disabledImage.nixosConfiguration.config;
             service = enabledConfig.systemd.services.virby-time-sync-agent;
             execStart = service.serviceConfig.ExecStart;
+            qemuGuestAgent = pkgs.callPackage ./pkgs/vm-image/qemu-guest-agent.nix { };
+            patchedQemuGuestAgentSource = pkgs.applyPatches {
+              name = "virby-qemu-guest-agent-patched-source";
+              inherit (qemuGuestAgent) src patches;
+            };
           in
           {
             vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner {
@@ -81,10 +86,20 @@
               assert lib.hasInfix "--method=vsock-listen" execStart;
               assert lib.hasInfix "--path=4294967295:2345" execStart;
               assert lib.hasInfix "--allow-rpcs=guest-set-time" execStart;
+              assert lib.hasPrefix "${qemuGuestAgent.ga}/bin/qemu-ga " execStart;
               assert builtins.elem "CAP_SYS_TIME" service.serviceConfig.CapabilityBoundingSet;
               assert builtins.elem pkgs.util-linux enabledConfig.environment.systemPackages;
               assert !(builtins.hasAttr "virby-time-sync-agent" disabledConfig.systemd.services);
-              pkgs.runCommand "virby-vm-time-sync-check" { } ''
+              pkgs.runCommand "virby-vm-time-sync-check" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
+                commands=${patchedQemuGuestAgentSource}/qga/commands-posix.c
+
+                grep -F '"/run/current-system/sw/bin/hwclock", "--noadjfile"' "$commands"
+                grep -F 'has_time ? "-w" : "-s", NULL' "$commands"
+                if grep -F 'argv[0] = "/sbin/hwclock"' "$commands"; then
+                  echo "qemu-ga retains the unsafe /sbin/hwclock fallback" >&2
+                  exit 1
+                fi
+
                 touch "$out"
               '';
           }
